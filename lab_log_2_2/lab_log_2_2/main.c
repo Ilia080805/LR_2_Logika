@@ -4,12 +4,10 @@
 #include <string.h>
 #include <windows.h>
 
-#define SIZE 10000
+static int depth = 0;
 
 void shell(int* items, int count) {
-    int i, j, gap, k;
-    int x, a[5];
-    a[0] = 9; a[1] = 5; a[2] = 3; a[3] = 2; a[4] = 1;
+    int i, j, gap, k, x, a[5] = { 9, 5, 3, 2, 1 };
     for (k = 0; k < 5; k++) {
         gap = a[k];
         for (i = gap; i < count; ++i) {
@@ -21,90 +19,102 @@ void shell(int* items, int count) {
     }
 }
 
-void qs(int* items, int left, int right) {
-    int i, j;
-    int x, y;
-    i = left; j = right;
-    x = items[(left + right) / 2];
+void qs_safe(int* items, int left, int right) {
+    depth++;
+    if (depth > 2500) {
+        depth--;
+        return;
+    }
 
+    int i = left, j = right;
+    int x = items[(left + right) / 2], y;
     do {
         while ((items[i] < x) && (i < right)) i++;
         while ((x < items[j]) && (j > left)) j--;
         if (i <= j) {
-            y = items[i];
-            items[i] = items[j];
-            items[j] = y;
+            y = items[i]; items[i] = items[j]; items[j] = y;
             i++; j--;
         }
     } while (i <= j);
-    if (left < j) qs(items, left, j);
-    if (i < right) qs(items, i, right);
+
+    if (left < j) qs_safe(items, left, j);
+    if (i < right) qs_safe(items, i, right);
+
+    depth--;
 }
 
 int compare_ints(const void* a, const void* b) {
-    int arg1 = *(const int*)a;
-    int arg2 = *(const int*)b;
-    if (arg1 < arg2) return -1;
-    if (arg1 > arg2) return 1;
-    return 0;
+    return (*(int*)a - *(int*)b);
 }
 
-void run_test(const char* test_name, int* original, int n) {
+void fill_arr(int* a, int n, int type) {
+    for (int i = 0; i < n; i++) {
+        if (type == 0) a[i] = rand() % 10000;
+        if (type == 1) a[i] = i;
+        if (type == 2) a[i] = n - i;
+        if (type == 3) a[i] = (i < n / 2) ? i : (n - i);
+    }
+}
+
+double measure(void (*sort_fn)(int*, int), int* orig, int n) {
     int* arr = (int*)malloc(n * sizeof(int));
-    clock_t start, end;
+    memcpy(arr, orig, n * sizeof(int));
 
-    printf("--- Тест: %s ---\n", test_name);
-
-    memcpy(arr, original, n * sizeof(int));
-    start = clock();
-    shell(arr, n);
-    end = clock();
-    printf("Shell:  %f сек.\n", (double)(end - start) / CLOCKS_PER_SEC);
-
-    memcpy(arr, original, n * sizeof(int));
-    start = clock();
-    qs(arr, 0, n - 1);
-    end = clock();
-    printf("QS:     %f сек.\n", (double)(end - start) / CLOCKS_PER_SEC);
-
-    memcpy(arr, original, n * sizeof(int));
-    start = clock();
-    qsort(arr, n, sizeof(int), compare_ints);
-    end = clock();
-    printf("qsort:  %f сек.\n\n", (double)(end - start) / CLOCKS_PER_SEC);
+    depth = 0;
+    clock_t start = clock();
+    sort_fn(arr, n);
+    clock_t end = clock();
 
     free(arr);
+    return (double)(end - start) / CLOCKS_PER_SEC;
 }
+
+void qs_wrap(int* a, int n) { qs_safe(a, 0, n - 1); }
+void qsort_wrap(int* a, int n) { qsort(a, n, sizeof(int), compare_ints); }
 
 int main(void) {
     SetConsoleCP(1251);
     SetConsoleOutputCP(1251);
     srand((unsigned int)time(NULL));
 
-    int* arr_rand = (int*)malloc(SIZE * sizeof(int));
-    int* arr_asc = (int*)malloc(SIZE * sizeof(int));
-    int* arr_desc = (int*)malloc(SIZE * sizeof(int));
-    int* arr_half = (int*)malloc(SIZE * sizeof(int));
+    int sizes[] = { 100, 1000, 10000 };
 
-    for (int i = 0; i < SIZE; i++) {
-        arr_rand[i] = rand() % 10000;
-        arr_asc[i] = i;
-        arr_desc[i] = SIZE - i;
+    printf("=== ЗАДАНИЕ 2: ТАБЛИЦЫ СОРТИРОВОК (ПО ДОСКЕ) ===\n");
 
-        if (i < SIZE / 2)
-            arr_half[i] = i;
-        else
-            arr_half[i] = SIZE - i;
+    for (int s = 0; s < 3; s++) {
+        int n = sizes[s];
+        printf("\n---------------- N = %d ----------------\n", n);
+        printf("+-----------+-----------+-----------+-----------+-----------+\n");
+        printf("| data/sort | Случайный | Возраст.  | Убывающ.  |   Пик     |\n");
+        printf("+-----------+-----------+-----------+-----------+-----------+\n");
+
+        int* orig_rand = (int*)malloc(n * sizeof(int)); fill_arr(orig_rand, n, 0);
+        int* orig_asc = (int*)malloc(n * sizeof(int)); fill_arr(orig_asc, n, 1);
+        int* orig_desc = (int*)malloc(n * sizeof(int)); fill_arr(orig_desc, n, 2);
+        int* orig_peak = (int*)malloc(n * sizeof(int)); fill_arr(orig_peak, n, 3);
+
+        printf("| Shell     | %9.4f | %9.4f | %9.4f | %9.4f |\n",
+            measure(shell, orig_rand, n),
+            measure(shell, orig_asc, n),
+            measure(shell, orig_desc, n),
+            measure(shell, orig_peak, n));
+
+        printf("| qs        | %9.4f | %9.4f | %9.4f | %9.4f |\n",
+            measure(qs_wrap, orig_rand, n),
+            measure(qs_wrap, orig_asc, n),
+            measure(qs_wrap, orig_desc, n),
+            measure(qs_wrap, orig_peak, n));
+
+        printf("| qsort     | %9.4f | %9.4f | %9.4f | %9.4f |\n",
+            measure(qsort_wrap, orig_rand, n),
+            measure(qsort_wrap, orig_asc, n),
+            measure(qsort_wrap, orig_desc, n),
+            measure(qsort_wrap, orig_peak, n));
+
+        printf("+-----------+-----------+-----------+-----------+-----------+\n");
+
+        free(orig_rand); free(orig_asc); free(orig_desc); free(orig_peak);
     }
-
-    printf("=== Задание 2: Сравнение сортировок (Размер %d) ===\n\n", SIZE);
-
-    run_test("1. Случайный массив", arr_rand, SIZE);
-    run_test("2. Возрастающий массив", arr_asc, SIZE);
-    run_test("3. Убывающий массив", arr_desc, SIZE);
-    run_test("4. Половина возрастает, половина убывает", arr_half, SIZE);
-
-    free(arr_rand); free(arr_asc); free(arr_desc); free(arr_half);
 
     return 0;
 }
