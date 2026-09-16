@@ -77,7 +77,7 @@ int main(void) {
     SetConsoleOutputCP(1251);
     srand((unsigned int)time(NULL));
 
-    int sizes[] = { 100, 1000, 10000 };
+    int sizes[] = { 1000, 10000, 50000 };
 
     printf("=== гюдюмхе 2: рюакхжш янпрхпнбнй (он дняйе) ===\n");
 
